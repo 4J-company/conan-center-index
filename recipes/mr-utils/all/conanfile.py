@@ -6,12 +6,12 @@ from conan.tools.cmake import CMakeDeps
 from conan.tools.cmake import CMakeToolchain
 from conan.tools.cmake import CMake
 from conan.tools.build import check_min_cppstd
-from conan.tools.files import copy, rmdir
+from conan.tools.files import copy, rmdir, get
 from conan.api.conan_api import ConanAPI
 
 class MrUtils(ConanFile):
     name = "mr-utils"
-    version = "1.0.0"
+    version = "1.0.2"
     license = "MIT"
 
     description = "Collection of C++ utilities for 4J projects"
