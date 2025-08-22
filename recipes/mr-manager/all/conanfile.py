@@ -45,6 +45,8 @@ class MrManager(ConanFile):
         toolchain = CMakeToolchain(self)
         toolchain.presets_prefix = "mr-manager"
         toolchain.generate()
+        deps = CMakeDeps(self)
+        deps.generate()
 
     def layout(self):
         cmake_layout(self)
