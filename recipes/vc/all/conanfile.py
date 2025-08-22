@@ -12,7 +12,6 @@ class VcConan(ConanFile):
     name = "vc"
     description = "SIMD Vector Classes for C++."
     license = "BSD-3-Clause"
-    version = "1.4.3-4j"
     topics = ("simd", "vectorization", "parallel", "sse", "avx", "neon")
     homepage = "https://github.com/4J-company/Vc"
     url = "https://github.com/4J-company/conan-center-index"

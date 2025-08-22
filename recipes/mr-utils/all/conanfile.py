@@ -11,7 +11,6 @@ from conan.api.conan_api import ConanAPI
 
 class MrUtils(ConanFile):
     name = "mr-utils"
-    version = "1.0.4"
     license = "MIT"
 
     description = "Collection of C++ utilities for 4J projects"

@@ -11,7 +11,6 @@ from conan.api.conan_api import ConanAPI
 
 class MrManager(ConanFile):
     name = "mr-manager"
-    version = "1.0.1"
     license = "MIT"
 
     description = "Wait-Free object manager with per-type memory pools"
