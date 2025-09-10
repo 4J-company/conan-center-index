@@ -5,7 +5,7 @@ from conan.tools.files import copy, rmdir, get
 
 class mr_importerRecipe(ConanFile):
     name = "mr-importer"
-    version = "1.1.2"
+    version = "1.2.0"
     package_type = "library"
 
     license = "MIT"
