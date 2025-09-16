@@ -8,7 +8,6 @@ from conan.tools.cmake import CMake
 from conan.tools.build import check_min_cppstd
 from conan.tools.files import copy, rmdir, get
 from conan.api.conan_api import ConanAPI
-
 class MrMath(ConanFile):
     name = "mr-math"
     license = "MIT"
