@@ -5,7 +5,6 @@ from conan.tools.files import copy, rmdir, get
 
 class mr_importerRecipe(ConanFile):
     name = "mr-importer"
-    version = "2.0.0"
     package_type = "library"
 
     license = "MIT"
@@ -39,7 +38,7 @@ class mr_importerRecipe(ConanFile):
 
         self.requires("onetbb/2022.2.0")
 
-        self.requires("mr-math/1.1.3")
+        self.requires("mr-math/1.1.4")
         self.requires("mr-utils/1.0.4")
         self.requires("mr-manager/1.0.1")
 
