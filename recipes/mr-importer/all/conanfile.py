@@ -30,6 +30,8 @@ class mr_importerRecipe(ConanFile):
         self.requires("meshoptimizer/0.23")
         self.requires("fastgltf/0.8.0")
 
+        self.requires("vulkan-headers/1.4.313.0")
+
         self.requires("glm/1.0.1")
 
         self.requires("slang/2025.10.4")
