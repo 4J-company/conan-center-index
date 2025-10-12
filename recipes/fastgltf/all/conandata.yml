@@ -1,0 +1,4 @@
+sources:
+  "0.9.0-4j":
+    url: "https://github.com/spnda/fastgltf/archive/refs/tags/v0.9.0.tar.gz"
+    sha256: "0bb564e127b14c22f062db50f89381dd2e0a20dbaf4987ca138a4ae8728712f9"
