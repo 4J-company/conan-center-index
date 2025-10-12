@@ -68,3 +68,6 @@ sources:
   "2.3.0":
     url: "https://github.com/4J-company/mr-importer/archive/refs/tags/v2.3.0.zip"
     strip_root: true
+  "2.3.1":
+    url: "https://github.com/4J-company/mr-importer/archive/refs/tags/v2.3.1.zip"
+    strip_root: true
