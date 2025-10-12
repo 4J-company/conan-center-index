@@ -28,6 +28,7 @@ class mr_importerRecipe(ConanFile):
 
         self.requires("efsw/1.4.1")
         self.requires("meshoptimizer/0.23")
+        self.requires("fastgltf/0.9.0-4j")
 
         self.requires("glm/1.0.1")
 
