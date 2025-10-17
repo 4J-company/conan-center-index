@@ -92,3 +92,6 @@ sources:
   "2.5.2":
     url: "https://github.com/4J-company/mr-importer/archive/refs/tags/v2.5.2.zip"
     strip_root: true
+  "2.6.0":
+    url: "https://github.com/4J-company/mr-importer/archive/refs/tags/v2.6.0.zip"
+    strip_root: true
