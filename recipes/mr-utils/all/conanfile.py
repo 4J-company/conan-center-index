@@ -39,6 +39,7 @@ class MrUtils(ConanFile):
     def requirements(self):
         self.requires("libassert/2.1.4")
         self.requires("spdlog/1.15.3")
+        self.requires("boost/1.88.0")
 
     def build_requirements(self):
         self.tool_requires("cmake/[>=3.27]")
