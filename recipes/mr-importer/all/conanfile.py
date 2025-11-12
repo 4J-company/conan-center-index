@@ -27,6 +27,7 @@ class mr_importerRecipe(ConanFile):
         self.requires("fastgltf/0.9.0-4j")
 
         self.requires("ktx/4.3.2")
+        self.requires("draco/1.5.7")
 
         self.requires("glm/1.0.1")
 
@@ -35,7 +36,7 @@ class mr_importerRecipe(ConanFile):
         self.requires("onetbb/2022.2.0")
 
         self.requires("mr-math/1.1.4")
-        self.requires("mr-utils/1.0.4")
+        self.requires("mr-utils/1.1.2")
 
         self.requires("tracy/0.12.2")
 
