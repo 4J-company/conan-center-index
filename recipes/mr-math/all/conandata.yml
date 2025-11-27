@@ -17,3 +17,6 @@ sources:
   "1.1.4":
     url: "https://github.com/4J-company/mr-math/archive/refs/tags/v1.1.4.zip"
     strip_root: true
+  "1.1.5":
+    url: "https://github.com/4J-company/mr-math/archive/refs/tags/v1.1.5.zip"
+    strip_root: true
