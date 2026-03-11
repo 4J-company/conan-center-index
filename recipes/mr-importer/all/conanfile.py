@@ -23,7 +23,7 @@ class mr_importerRecipe(ConanFile):
     def requirements(self):
         self.requires("spdlog/1.14.1", override=True)
 
-        self.requires("meshoptimizer/0.25")
+        self.requires("meshoptimizer/1.0")
         self.requires("fastgltf/0.9.0-4j")
 
         self.requires("ktx/4.3.2")
