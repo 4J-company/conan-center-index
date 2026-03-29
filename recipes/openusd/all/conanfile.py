@@ -134,7 +134,7 @@ class OpenUSDConan(ConanFile):
         if self.options.with_draco:
             self.requires("draco/1.5.6")
         if self.options.with_materialx:
-            self.requires("materialx/1.39.1", transitive_headers=True)
+            self.requires("materialx/1.39.4", transitive_headers=True)
         # if self.options.enable_osl_support:
             # TODO: add osl recipe (https://github.com/AcademySoftwareFoundation/OpenShadingLanguage)
             # self.requires("openshadinglanguage/1.13.8.0")
@@ -276,8 +276,12 @@ class OpenUSDConan(ConanFile):
                     if dep != dep_comp and dep_comp not in self.dependencies.host[dep].cpp_info.components:
                         raise ConanException(f"Unexpected dependency for {component}: no component {dep}::{dep_comp} in {dep}")
                     all_ext_deps.add(dep)
-        if direct_deps - all_ext_deps:
-            raise ConanException(f"Dependencies not used by any components: {', '.join(direct_deps - all_ext_deps)}")
+        unused = direct_deps - all_ext_deps
+        # xorg is required on Linux for imaging, but CMake may not emit separate X11 targets
+        # (e.g. GL/EGL paths without libX11 edges in the graphviz graph).
+        unused.discard("xorg")
+        if unused:
+            raise ConanException(f"Dependencies not used by any components: {', '.join(sorted(unused))}")
 
     def build(self):
         cmake = CMake(self)
@@ -325,7 +329,8 @@ class OpenUSDConan(ConanFile):
         for name, data in components.items():
             if name not in plugins:
                 component = self.cpp_info.components[name]
-                component.libs = [f"usd_{name}"]
+                if data.get("has_usd_lib", True):
+                    component.libs = [f"usd_{name}"]
                 component.requires = data["requires"]
                 component.system_libs = data["system_libs"]
 
@@ -342,6 +347,111 @@ def parse_dotfile(dotfile, label_replacements=None):
     for src, dst in re.findall(r'^\s*"(node\d+)"\s*->\s*"(node\d+)"', dotfile, re.MULTILINE):
         components[labels[src]].append(labels[dst])
     return components
+
+
+def _valid_cmake_component_name(name):
+    """CMakeDeps builds variables from component names; only [A-Za-z0-9_] are safe."""
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name))
+
+
+def _is_linker_flag_graphviz_label(name):
+    """Graphviz nodes for linker options (-Wl,...) must not become library components."""
+    if _valid_cmake_component_name(name):
+        return False
+    return name.startswith("-") or "," in name
+
+
+def _normalize_graphviz_lib_label(label):
+    """
+    CMake --graphviz may label edges with filesystem paths to .so files (e.g.
+    /usr/lib/libICE.so) instead of imported targets. Those strings are not valid
+    Conan component names and were being sanitized to usr_lib_libICE_so, which then
+    appeared as bogus internal requires. Normalize to the library basename (libICE)
+    so ext_dep_map can map to xorg::ice, etc.
+    """
+    if not label or "::" in label:
+        return label
+    norm = label.replace("\\", "/")
+    if "/" not in norm and not norm.endswith((".so", ".dylib", ".dll", ".a")):
+        return label
+    base = Path(norm).name
+    if not base:
+        return label
+    # libICE.so, libICE.so.1, libICE.so.1.2
+    m = re.match(r"^(lib.+)\.so(?:\.\d+)*$", base)
+    if m:
+        return m.group(1)
+    if base.endswith((".so", ".dylib", ".dll", ".a")):
+        return Path(base).stem
+    return label
+
+
+def _sanitize_cmake_component_name(name):
+    """Map arbitrary Graphviz labels to a stable CMake-safe identifier."""
+    s = re.sub(r"[^A-Za-z0-9_]+", "_", name)
+    s = re.sub(r"_+", "_", s).strip("_")
+    if not s:
+        s = "link_token"
+    if s[0].isdigit():
+        s = "_" + s
+    if not re.match(r"[A-Za-z_]", s):
+        s = "x_" + s
+    return s
+
+
+def _graphviz_label_must_rename_for_cmakedeps(name):
+    """
+    Only labels used as *this* package's component names need renaming for CMakeDeps
+    (invalid characters, e.g. linker tokens like -Wl,--whole-archive).
+
+    CMake imported target names (Foo::bar) must stay unchanged so ext_dep_map keys
+    such as TBB::tbb, OpenGL::GL still match and validate_components() sees onetbb,
+    opengl, etc. in requires.
+    """
+    if "::" in name:
+        return False
+    return not _valid_cmake_component_name(name)
+
+
+def _build_graphviz_label_rename(all_labels):
+    """
+    Assign each Graphviz label a CMake-safe name. Resolves collisions when different
+    labels sanitize to the same base (e.g. 'a--b' vs 'a__b').
+    """
+    rename = {}
+    used = set()
+    for label in sorted(all_labels):
+        if not _graphviz_label_must_rename_for_cmakedeps(label):
+            new = label
+        else:
+            base = _sanitize_cmake_component_name(label)
+            candidate = base
+            n = 2
+            while candidate in used:
+                candidate = f"{base}_{n}"
+                n += 1
+            new = candidate
+        rename[label] = new
+        used.add(new)
+    return rename
+
+
+def _apply_graphviz_rename_to_components(raw_components, rename):
+    """Merge lists when multiple raw labels collapse to the same renamed key."""
+    merged = {}
+    for k, deps in raw_components.items():
+        nk = rename[k]
+        ndeps = [rename[d] for d in deps]
+        merged.setdefault(nk, []).extend(ndeps)
+    for nk in merged:
+        seen = set()
+        deduped = []
+        for d in merged[nk]:
+            if d not in seen:
+                seen.add(d)
+                deduped.append(d)
+        merged[nk] = deduped
+    return merged
 
 
 def components_from_dotfile(dotfile, cmake_to_conan_targets):
@@ -365,6 +475,14 @@ def components_from_dotfile(dotfile, cmake_to_conan_targets):
         "libSM":   "xorg::sm",
         "libX11":  "xorg::x11",
         "libXext": "xorg::xext",
+        # CMake FindX11 / FindICE / FindSM imported targets (GraphViz labels differ from libX11 names)
+        "ICE::ICE": "xorg::ice",
+        "SM::SM": "xorg::sm",
+        "X11::X11": "xorg::x11",
+        "X11::Xext": "xorg::xext",
+        "X11::Xi": "xorg::xi",
+        "X11::Xrandr": "xorg::xrandr",
+        "X11::Xrender": "xorg::xrender",
         "OpenGL::EGL": "egl::egl",
         "OpenGL::GL": "opengl::opengl",
         "OpenGL::GLES2": "opengl::opengl",
@@ -374,14 +492,43 @@ def components_from_dotfile(dotfile, cmake_to_conan_targets):
         "MaterialXGenMsl": "materialx::MaterialXGenMsl",
         "MaterialXRenderGlsl": "materialx::MaterialXRenderGlsl",
     }
-    components = {}
-    for component, deps in parse_dotfile(dotfile).items():
+    raw = parse_dotfile(dotfile)
+    filtered = {}
+    for component, deps in raw.items():
         if "::" in component or component in ext_dep_map:
             continue
         if component in known_system_libs:
             continue
         if "/" in component or "\\" in component:
             continue
+        filtered[component] = [_normalize_graphviz_lib_label(d) for d in deps]
+
+    all_labels = set(filtered.keys()) | {d for ds in filtered.values() for d in ds}
+    rename = _build_graphviz_label_rename(all_labels)
+    merged = _apply_graphviz_rename_to_components(filtered, rename)
+    sources_by_renamed = {}
+    for old, new in rename.items():
+        sources_by_renamed.setdefault(new, []).append(old)
+
+    def _sources_for_component(c):
+        return sources_by_renamed.get(c, [c])
+
+    def _has_usd_lib(sources):
+        if any(_valid_cmake_component_name(s) for s in sources):
+            return True
+        if sources and all(_is_linker_flag_graphviz_label(s) for s in sources):
+            return False
+        return True
+
+    components = {}
+    for component, deps in merged.items():
+        if "::" in component or component in ext_dep_map:
+            continue
+        if component in known_system_libs:
+            continue
+        if "/" in component or "\\" in component:
+            continue
+        sources = _sources_for_component(component)
         requires = []
         system_libs = []
         for dep in deps:
@@ -392,8 +539,12 @@ def components_from_dotfile(dotfile, cmake_to_conan_targets):
             else:
                 dep = ext_dep_map.get(dep, dep)
                 requires.append(dep)
+        # Do not put -Wl,--whole-archive (etc.) into cpp_info.exelinkflags: CMakeDeps
+        # repeats them per-component / transitively and can link libgcc.a objects twice
+        # (multiple definition of bid128.o / __bid_* symbols).
         components[component] = {
             "requires": requires,
             "system_libs": system_libs,
+            "has_usd_lib": _has_usd_lib(sources),
         }
     return components
