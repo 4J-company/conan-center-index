@@ -154,10 +154,76 @@ class OpenUSDConan(ConanFile):
     def source(self):
         get(self, **self.conan_data["sources"][self.version], strip_root=True)
         apply_conandata_patches(self)
+        # Clang + libstdc++ instantiates unique_ptr<UsdPrimDefinition>'s
+        # destructor from the inline map lookups while that type is still
+        # incomplete (schemaRegistry.h only forward-declares it). GCC does
+        # not. Define the lookups in the cpp, which includes primDefinition.h.
+        # Upstream PR is still open: PixarAnimationStudios/OpenUSD#4085.
+        replace_in_file(
+            self,
+            os.path.join("pxr", "usd", "usd", "schemaRegistry.h"),
+            """    const UsdPrimDefinition* FindConcretePrimDefinition(
+        const TfToken &typeName) const {
+        const auto it = _concreteTypedPrimDefinitions.find(typeName);
+        return it != _concreteTypedPrimDefinitions.end() ? 
+            it->second.get() : nullptr;
+    }""",
+            """    const UsdPrimDefinition* FindConcretePrimDefinition(
+        const TfToken &typeName) const;""",
+        )
+        replace_in_file(
+            self,
+            os.path.join("pxr", "usd", "usd", "schemaRegistry.h"),
+            """    const UsdPrimDefinition *FindAppliedAPIPrimDefinition(
+        const TfToken &typeName) const {
+        const auto it = _appliedAPIPrimDefinitions.find(typeName);
+        return it != _appliedAPIPrimDefinitions.end() ?
+            it->second.primDef.get() : nullptr;
+    }""",
+            """    const UsdPrimDefinition *FindAppliedAPIPrimDefinition(
+        const TfToken &typeName) const;""",
+        )
+        replace_in_file(
+            self,
+            os.path.join("pxr", "usd", "usd", "schemaRegistry.cpp"),
+            "PXR_NAMESPACE_CLOSE_SCOPE\n",
+            """const UsdPrimDefinition*
+UsdSchemaRegistry::FindConcretePrimDefinition(const TfToken &typeName) const
+{
+    const auto it = _concreteTypedPrimDefinitions.find(typeName);
+    return it != _concreteTypedPrimDefinitions.end() ? it->second.get() : nullptr;
+}
+
+const UsdPrimDefinition*
+UsdSchemaRegistry::FindAppliedAPIPrimDefinition(const TfToken &typeName) const
+{
+    const auto it = _appliedAPIPrimDefinitions.find(typeName);
+    return it != _appliedAPIPrimDefinitions.end() ? it->second.primDef.get() : nullptr;
+}
+
+PXR_NAMESPACE_CLOSE_SCOPE
+""",
+        )
         replace_in_file(self, os.path.join("cmake", "defaults", "Packages.cmake"),
                         'if (EXISTS $ENV{VULKAN_SDK})', "if (FALSE)")
         replace_in_file(self, os.path.join("cmake", "defaults", "Packages.cmake"),
                         'message(FATAL_ERROR "VULKAN_SDK not valid")', "")
+        # Linux ld.bfd reads -Wl,-force_load as its -f option ("-f may not be used
+        # without -shared"). -force_load is Apple ld64. Clang on Linux needs
+        # the same --whole-archive pair as GCC. Keep -force_load for Apple ld64.
+        replace_in_file(
+            self,
+            os.path.join("cmake", "macros", "Private.cmake"),
+            '''            elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+                list(APPEND final -Wl,-force_load ${lib})
+                add_dependencies(${NAME} ${lib})''',
+            '''            elseif(APPLE AND "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+                list(APPEND final -Wl,-force_load ${lib})
+                add_dependencies(${NAME} ${lib})
+            elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+                list(APPEND final -Wl,--whole-archive ${lib} -Wl,--no-whole-archive)
+                add_dependencies(${NAME} ${lib})''',
+        )
 
     def generate(self):
         tc = CMakeToolchain(self)
